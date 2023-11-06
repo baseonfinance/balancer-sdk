@@ -333,7 +333,7 @@ export const BALANCER_NETWORK_CONFIG: Record<Network, BalancerNetworkConfig> = {
     },
     urls: {
       subgraph:
-        'https://api.thegraph.com/subgraphs/name/beethovenxfi/beethovenx-v2-fantom',
+        'https://api.thegraph.com/subgraphs/name/basedollarfinance/core-fantom',
       gaugesSubgraph: '', // no guages on fantom
       blockNumberSubgraph:
         'https://api.thegraph.com/subgraphs/name/beethovenxfi/fantom-blocks',
