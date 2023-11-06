@@ -19,7 +19,7 @@ import {
 } from '@/test/lib/utils';
 import { Relayer } from '@/modules/relayer/relayer.module';
 import { SimulationType } from '../simulation/simulation.module';
-import { GeneralisedExitOutput, ExitInfo } from '../exits/exits.module';
+import { GeneralisedExitOutput, ExitInfo } from './exits.module';
 
 export interface Pool {
   id: string;

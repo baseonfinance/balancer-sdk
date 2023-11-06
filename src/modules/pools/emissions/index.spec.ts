@@ -2,7 +2,7 @@ import * as emissions from '@/modules/data/bal/emissions';
 import { factories } from '@/test/factories';
 import { LiquidityGauge } from '@/types';
 import { expect } from 'chai';
-import { EmissionsService } from './';
+import { EmissionsService } from '.';
 
 const poolId = '1';
 const relativeWeight = 0.1;

@@ -1,5 +1,6 @@
-import * as SOR from '@balancer-labs/sor';
+import { WeightedMaths } from '@balancer-labs/sor';
 import { BigNumber } from '@ethersproject/bignumber';
+import { AddressZero } from '@ethersproject/constants';
 
 import { BalancerError, BalancerErrorCode } from '@/balancerErrors';
 import { Vault__factory } from '@/contracts/factories/Vault__factory';
@@ -7,21 +8,19 @@ import { balancerVault } from '@/lib/constants/config';
 import { AssetHelpers, getEthValue, parsePoolInfo } from '@/lib/utils';
 import { subSlippage } from '@/lib/utils/slippageHelper';
 import { _upscaleArray } from '@/lib/utils/solidityMaths';
-import { StablePoolEncoder } from '@/pool-stable';
-import { Pool } from '@/types';
-
-import { StablePoolPriceImpact } from '../stable/priceImpact.concern';
+import { WeightedPoolEncoder } from '@/pool-weighted';
+import { Address, Pool } from '@/types';
 import {
   JoinConcern,
   JoinPool,
   JoinPoolAttributes,
   JoinPoolParameters,
 } from '../types';
-import { AddressZero } from '@ethersproject/constants';
+import { WeightedPoolPriceImpact } from './priceImpact.concern';
 
 type SortedValues = {
   poolTokens: string[];
-  ampWithPrecision: bigint;
+  weights: bigint[];
   totalSharesEvm: bigint;
   swapFeeEvm: bigint;
   upScaledBalances: bigint[];
@@ -29,14 +28,7 @@ type SortedValues = {
   sortedAmountsIn: string[];
 };
 
-type EncodeJoinPoolParams = {
-  joiner: string;
-  poolId: string;
-  minBPTOut: string;
-} & Pick<SortedValues, 'poolTokens' | 'sortedAmountsIn'> &
-  Pick<JoinPoolParameters, 'amountsIn' | 'tokensIn'>;
-
-export class StablePoolJoin implements JoinConcern {
+export class WeightedPoolJoin implements JoinConcern {
   buildJoin = ({
     joiner,
     pool,
@@ -45,7 +37,8 @@ export class StablePoolJoin implements JoinConcern {
     slippage,
     wrappedNativeAsset,
   }: JoinPoolParameters): JoinPoolAttributes => {
-    this.checkInputs(tokensIn, amountsIn, pool);
+    this.checkInputs(amountsIn, tokensIn, pool);
+
     const sortedValues = this.sortValues({
       pool,
       wrappedNativeAsset,
@@ -58,16 +51,16 @@ export class StablePoolJoin implements JoinConcern {
       slippage,
     });
 
-    const encodedData = this.encodeJoinPool({
-      joiner,
-      amountsIn,
-      tokensIn,
-      poolId: pool.id,
-      minBPTOut,
+    const encodedFunctionData = this.encodeJoinPool({
       ...sortedValues,
+      poolId: pool.id,
+      joiner,
+      minBPTOut,
+      tokensIn,
+      amountsIn,
     });
 
-    const priceImpactConcern = new StablePoolPriceImpact();
+    const priceImpactConcern = new WeightedPoolPriceImpact();
     const priceImpact = priceImpactConcern.calcPriceImpact(
       pool,
       sortedValues.sortedAmountsIn.map(BigInt),
@@ -76,7 +69,7 @@ export class StablePoolJoin implements JoinConcern {
     );
 
     return {
-      ...encodedData,
+      ...encodedFunctionData,
       minBPTOut,
       expectedBPTOut,
       priceImpact,
@@ -89,7 +82,7 @@ export class StablePoolJoin implements JoinConcern {
    * @param tokensIn Must contain all the tokens of the pool
    * @param pool The pool that is being joined
    */
-  checkInputs = (amountsIn: string[], tokensIn: string[], pool: Pool): void => {
+  checkInputs = (tokensIn: string[], amountsIn: string[], pool: Pool): void => {
     if (
       tokensIn.length != amountsIn.length ||
       tokensIn.length != pool.tokensList.length
@@ -97,57 +90,51 @@ export class StablePoolJoin implements JoinConcern {
       throw new BalancerError(BalancerErrorCode.INPUT_LENGTH_MISMATCH);
     }
 
-    // Check if there's any relevant stable pool info missing
+    // Check if there's any relevant weighted pool info missing
     if (pool.tokens.some((token) => token.decimals === undefined))
       throw new BalancerError(BalancerErrorCode.MISSING_DECIMALS);
-    if (!pool.amp) throw new BalancerError(BalancerErrorCode.MISSING_AMP);
+    if (pool.tokens.some((token) => !token.weight))
+      throw new BalancerError(BalancerErrorCode.MISSING_WEIGHT);
   };
 
   sortValues = ({
     pool,
-    wrappedNativeAsset,
-    amountsIn,
     tokensIn,
+    amountsIn,
+    wrappedNativeAsset,
   }: Pick<
     JoinPoolParameters,
     'pool' | 'wrappedNativeAsset' | 'amountsIn' | 'tokensIn'
   >): SortedValues => {
+    const shouldUnwrapNativeAsset = tokensIn.some((a) => a === AddressZero);
     // Parse pool info into EVM amounts in order to match amountsIn scalling
-    const {
-      poolTokens,
-      ampWithPrecision,
-      totalSharesEvm,
-      swapFeeEvm,
-      scalingFactors,
-      upScaledBalances,
-    } = parsePoolInfo(pool, wrappedNativeAsset, tokensIn.includes(AddressZero));
+    const parsedPoolInfo = parsePoolInfo(
+      pool,
+      wrappedNativeAsset,
+      shouldUnwrapNativeAsset
+    );
 
     const assetHelpers = new AssetHelpers(wrappedNativeAsset);
-    // Sorts amounts in into ascending order (referenced to token addresses) to match the format expected by the Vault.
+    // sort inputs
     const [, sortedAmountsIn] = assetHelpers.sortTokens(
       tokensIn,
       amountsIn
     ) as [string[], string[]];
-
-    // Maths should use upscaled amounts, e.g. 1USDC => 1e18 not 1e6
     const upScaledAmountsIn = _upscaleArray(
-      sortedAmountsIn.map((a) => BigInt(a)),
-      scalingFactors.map((a) => BigInt(a))
+      sortedAmountsIn.map(BigInt),
+      parsedPoolInfo.scalingFactors
     );
+    // sort pool info
     return {
-      poolTokens,
-      ampWithPrecision,
-      totalSharesEvm,
-      swapFeeEvm,
-      upScaledBalances,
-      upScaledAmountsIn,
+      ...parsedPoolInfo,
       sortedAmountsIn,
+      upScaledAmountsIn,
     };
   };
 
   calcBptOutGivenExactTokensIn = ({
-    ampWithPrecision,
     upScaledBalances,
+    weights,
     upScaledAmountsIn,
     totalSharesEvm,
     swapFeeEvm,
@@ -155,15 +142,15 @@ export class StablePoolJoin implements JoinConcern {
   }: Pick<JoinPoolParameters, 'slippage'> &
     Pick<
       SortedValues,
-      | 'ampWithPrecision'
       | 'upScaledBalances'
+      | 'weights'
       | 'upScaledAmountsIn'
       | 'totalSharesEvm'
       | 'swapFeeEvm'
     >): { expectedBPTOut: string; minBPTOut: string } => {
-    const expectedBPTOut = SOR.StableMathBigInt._calcBptOutGivenExactTokensIn(
-      ampWithPrecision,
+    const expectedBPTOut = WeightedMaths._calcBptOutGivenExactTokensIn(
       upScaledBalances,
+      weights,
       upScaledAmountsIn,
       totalSharesEvm,
       swapFeeEvm
@@ -179,24 +166,27 @@ export class StablePoolJoin implements JoinConcern {
       minBPTOut,
     };
   };
-
   encodeJoinPool = ({
+    sortedAmountsIn,
+    poolTokens,
     poolId,
     joiner,
-    poolTokens,
-    sortedAmountsIn,
+    minBPTOut,
     amountsIn,
     tokensIn,
-    minBPTOut,
-  }: EncodeJoinPoolParams): Pick<
+  }: Pick<SortedValues, 'sortedAmountsIn' | 'poolTokens'> &
+    Pick<JoinPoolParameters, 'joiner' | 'amountsIn' | 'tokensIn'> & {
+      joiner: Address;
+      poolId: string;
+      minBPTOut: string;
+    }): Pick<
     JoinPoolAttributes,
     'value' | 'data' | 'to' | 'functionName' | 'attributes'
   > => {
-    const userData = StablePoolEncoder.joinExactTokensInForBPTOut(
+    const userData = WeightedPoolEncoder.joinExactTokensInForBPTOut(
       sortedAmountsIn,
       minBPTOut
     );
-
     const to = balancerVault;
     const functionName = 'joinPool';
     const attributes: JoinPool = {
@@ -219,14 +209,13 @@ export class StablePoolJoin implements JoinConcern {
       attributes.joinPoolRequest,
     ]);
 
-    // If joining with a native asset value must be set in call
     const value = getEthValue(tokensIn, amountsIn);
 
     return {
-      attributes,
-      data,
-      functionName,
       to,
+      functionName,
+      data,
+      attributes,
       value,
     };
   };

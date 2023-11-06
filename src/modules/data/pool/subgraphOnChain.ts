@@ -2,7 +2,7 @@ import { Cacheable, Findable, Searchable } from '../types';
 import { Provider } from '@ethersproject/providers';
 import { PoolAttribute, PoolsRepositoryFetchOptions } from './types';
 import { Pool } from '@/types';
-import { getOnChainBalances } from '../../../modules/sor/pool-data/onChainData';
+import { getOnChainBalances } from '../../sor/pool-data/onChainData';
 import { PoolsSubgraphRepository } from './subgraph';
 import { isSameAddress } from '@/lib/utils';
 import { Logger } from '@/lib/utils/logger';

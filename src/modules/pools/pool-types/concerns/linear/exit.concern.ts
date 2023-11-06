@@ -19,7 +19,7 @@ import {
   ExitPoolAttributes,
   ExitPool,
 } from '../types';
-import { LinearPriceImpact } from '../linear/priceImpact.concern';
+import { LinearPriceImpact } from './priceImpact.concern';
 
 interface SortedValues {
   bptIndex: number;

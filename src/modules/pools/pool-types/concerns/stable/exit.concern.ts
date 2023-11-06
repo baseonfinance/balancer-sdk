@@ -23,7 +23,7 @@ import {
 } from '@/lib/utils/solidityMaths';
 import { Pool } from '@/types';
 import { BasePoolEncoder } from '@/pool-base';
-import { StablePoolPriceImpact } from '../stable/priceImpact.concern';
+import { StablePoolPriceImpact } from './priceImpact.concern';
 
 interface SortedValues {
   poolTokens: string[];
