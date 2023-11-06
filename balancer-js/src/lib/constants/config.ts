@@ -310,15 +310,15 @@ export const BALANCER_NETWORK_CONFIG: Record<Network, BalancerNetworkConfig> = {
     //Fantom deployment addresses: https://docs.beets.fi/technicals/deployments
     addresses: {
       contracts: {
-        vault: '0x20dd72Ed959b6147912C2e529F0a0C651c33c9ce',
+        vault: '0x11F5253EADD2BddB2b4e1b62D8741643554a9Ba1',
         multicall: '0x66335d7ad8011f6aa3f48aadcb523b62b38ed961',
         poolDataQueries: '0xb132F1E145DcC085980C531e2dA81f2b84efc14F',
         gaugeClaimHelper: '0x0000000000000000000000000000000000000000', // no guages on fantom
-        balancerRelayer: '0x419f7925b8c9e409b6ee8792242556fa210a7a09',
-        balancerHelpers: '0xfE18C7C70b0a2c6541bEde0367124278BC345Dc8',
+        balancerRelayer: '0x166CC8A554C040EBB0C60b5Ee3C89C3268A2dDf2',
+        balancerHelpers: '0x37C678a1B9de2bA45831e4956dfd8254E081FfD0',
         weightedPoolFactory: '0x60467cb225092cE0c989361934311175f437Cf53',
         composableStablePoolFactory:
-          '0x44814E3A603bb7F1198617995c5696C232F6e8Ed',
+          '0xf26C221cf54eAcdfd4F4284223e1b7a039a2463d',
         yearnLinearPoolFactory: '0x1f73ae6ed391a2b1e84ff988a1bb5394b78a4a71',
       },
       tokens: {
